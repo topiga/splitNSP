@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Author: AnalogMan
 # Modified Date: 2018-10-08
-# Purpose: Splits Nintendo Switch NSP files into parts for installation on FAT32
+# Purpose: Splits Nintendo Switch NSP or NSZ files into parts for installation on FAT32
 
 import os
 import argparse
@@ -18,16 +18,26 @@ def splitQuick(filepath):
     if info.free < splitSize:
         print('Not enough temporary space. Needs 4GiB of free space\n')
         return
+    
+    # Identify extension and create directory name accordingly
+    extension = os.path.splitext(filepath)[1].lower()
+    extension_name = 'NSP'
+    # Fallback to .nsp if neither .nsp nor .nsz
+    if extension not in ('.nsp', '.nsz'):
+        extension = '.nsp'
+    if extension == '.nsz':
+        extension_name = 'NSZ'
+
     print('Calculating number of splits...\n')
     splitNum = int(fileSize/splitSize)
     if splitNum == 0:
-        print('This NSP is under 4GiB and does not need to be split.\n')
+        print('This ' + extension_name + ' is under 4GiB and does not need to be split.\n')
         return
 
-    print('Splitting NSP into {0} parts...\n'.format(splitNum + 1))
-    
+    print('Splitting ' + extension_name + ' into {0} parts...\n'.format(splitNum + 1))
+    dir = filepath[:-4] + '_split' + extension
+
     # Create directory, delete if already exists
-    dir = filepath[:-4] + '_split.nsp'
     if os.path.exists(dir):
         shutil.rmtree(dir)
     os.makedirs(dir)
@@ -62,7 +72,7 @@ def splitQuick(filepath):
             partSize = 0
             print('Starting part {:02}'.format(splitNum - (i + 1)))
             with open(outFile, 'wb') as splitFile:
-                 while partSize < splitSize:
+                while partSize < splitSize:
                     splitFile.write(nspFile.read(chunkSize))
                     partSize += chunkSize
             nspFile.seek(splitSize * -1, os.SEEK_END)
@@ -72,29 +82,45 @@ def splitQuick(filepath):
     # Print assurance statement for user
     print('Starting part 00\nPart 00 complete')
 
-    print('\nNSP successfully split!\n')
+    print('\n' + extension_name + ' successfully split!\n')
     
 def splitCopy(filepath, output_dir=""):
+    # Identify extension and create extension name accordingly
+    extension = os.path.splitext(filepath)[1].lower()
+    extension_name = 'NSP'
+    # Fallback to .nsp if neither .nsp nor .nsz
+    if extension not in ('.nsp', '.nsz'):
+        extension = '.nsp'
+    if extension == '.nsz':
+        extension_name = 'NSZ'
+
     fileSize = os.path.getsize(filepath)
     info = shutil.disk_usage(os.path.dirname(os.path.abspath(filepath)))
     if info.free < fileSize*2:
-        print('Not enough free space to run. Will require twice the space as the NSP file\n')
+        print('Not enough free space to run. Will require twice the space as the ' + extension_name + ' file\n')
         return
     print('Calculating number of splits...\n')
     splitNum = int(fileSize/splitSize)
     if splitNum == 0:
-        print('This NSP is under 4GiB and does not need to be split.\n')
+        print('This ' + extension_name + ' file is under 4GiB and does not need to be split.\n')
         return
     
-    print('Splitting NSP into {0} parts...\n'.format(splitNum + 1))
+    print('Splitting ' + extension_name + ' file into {0} parts...\n'.format(splitNum + 1))
+
+    # Identify extension and handle directory naming
+    extension = os.path.splitext(filepath)[1].lower()
+    if extension not in ('.nsp', '.nsz'):
+        extension = '.nsp'
 
     # Create directory, delete if already exists
     if output_dir == "":
-        dir = filepath[:-4] + '_split.nsp'
+        dir = filepath[:-4] + '_split' + extension
     else:
-        if output_dir[-4:] != '.nsp':
-            output_dir+= ".nsp"
+        # If the user provided an output directory that doesn't match .nsp or .nsz, default to .nsp
+        if not output_dir.lower().endswith(('.nsp', '.nsz')):
+            output_dir += '.nsp'
         dir = output_dir
+
     if os.path.exists(dir):
         shutil.rmtree(dir)
     os.makedirs(dir)
@@ -107,7 +133,7 @@ def splitCopy(filepath, output_dir=""):
             partSize = 0
             print('Starting part {:02}'.format(i))
             outFile = os.path.join(dir, '{:02}'.format(i))
-            with open(outFile, 'wb') as splitFile: 
+            with open(outFile, 'wb') as splitFile:
                 if remainingSize > splitSize:
                     while partSize < splitSize:
                         splitFile.write(nspFile.read(chunkSize))
@@ -118,14 +144,14 @@ def splitCopy(filepath, output_dir=""):
                         splitFile.write(nspFile.read(chunkSize))
                         partSize += chunkSize
             print('Part {:02} complete'.format(i))
-    print('\nNSP successfully split!\n')
+    print('\n' + extension_name + ' successfully split!\n')
 
 def main():
-    print('\n========== NSP Splitter ==========\n')
+    print('\n========== NSP/NSZ Splitter ==========\n')
 
     # Arg parser for program options
-    parser = argparse.ArgumentParser(description='Split NSP files into FAT32 compatible sizes')
-    parser.add_argument('filepath', help='Path to NSP file')
+    parser = argparse.ArgumentParser(description='Split NSP or NSZ files into FAT32 compatible sizes')
+    parser.add_argument('filepath', help='Path to NSP or NSZ file')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-q', '--quick', action='store_true', help='Splits file in-place without creating a copy. Only requires 4GiB free space to run')
     group.add_argument('-o', '--output-dir', type=str, default="",
@@ -136,12 +162,12 @@ def main():
 
     filepath = args.filepath
 
-    # Check if required files exist
-    if os.path.isfile(filepath) == False:
-        print('NSP cannot be found\n')
+    # Check if required file exists
+    if not os.path.isfile(filepath):
+        print('File cannot be found\n')
         return 1
     
-    # Split NSP file
+    # Split file
     if args.quick:
         splitQuick(filepath)
     else:
